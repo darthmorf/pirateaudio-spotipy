@@ -89,32 +89,41 @@ class PirateHat:
             return
 
         if label == "A":
+            self.play_pause()
+
+    def play_pause(self):
+        current_track = self.spotify.current_playback(additional_types=["episode"])
+
+        if current_track and current_track["is_playing"]:
             self.spotify.pause_playback()
+        else:
+            self.spotify.start_playback()
+
 
 
     def loop(self):
-        throttle = 0.5
+        throttle = 0.25
 
         while True:
 
+            # Get the current album art if running
             if self.running:
-
-                self.get_current_album()
-                self.disp.display(self.image)
+                self.image = self.get_current_album_image()
                 self.backlight.ChangeDutyCycle(100)
-
-                if self.image == self.blankImage:  
-                    self.backlight.ChangeDutyCycle(0)
-
+            # Otherwise get nothing
             else:
-                self.disp.display(self.blankImage)
+                self.image = self.blankImage
+               
+            # Turn off the display if the image is blank
+            if self.image == self.blankImage:
                 self.backlight.ChangeDutyCycle(0)
-        
 
+            # Update the display
+            self.disp.display(self.image)
             time.sleep(throttle)
 
 
-    def get_current_album(self):
+    def get_current_album_image(self):
         try:
         
             # Get currently playing
@@ -135,17 +144,19 @@ class PirateHat:
                 im = Image.open(BytesIO(response.content)).convert('RGB')
                 im = im.resize(self.imageSize)
 
-                self.image = im
+                return im
 
             else:
-                self.image = self.blankImage
+                return self.blankImage
 
         except ReadTimeout:
             print("Spotify timed out...")
+            return self.blankImage
 
         except Exception as e:
             print("Spotify Error:")
             print(e)   
+            return self.blankImage
 
 
 
