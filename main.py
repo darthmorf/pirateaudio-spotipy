@@ -90,6 +90,10 @@ class PirateHat:
 
         if label == "A":
             self.play_pause()
+        elif label == "B":
+            self.skip_next_track()
+        elif label == "Y":
+            self.skip_last_track()
 
     def play_pause(self):
         current_track = self.spotify.current_playback(additional_types=["episode"])
@@ -99,6 +103,12 @@ class PirateHat:
         else:
             self.spotify.start_playback()
 
+    def skip_next_track(self):
+        self.spotify.next_track()
+
+
+    def skip_last_track(self):
+        self.spotify.previous_track()
 
 
     def loop(self):
