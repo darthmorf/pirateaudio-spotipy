@@ -27,7 +27,7 @@ class PirateHat:
     image = None
     blankImage = None
     loopThread = None
-
+    backlight = None
 
     def __init__(self):
         # Setup Spotify
@@ -58,11 +58,17 @@ class PirateHat:
         self.blankImage = Image.new('RGB', self.imageSize, color=(0, 0, 0))
         self.image = self.blankImage
 
-        # Setup Buttons
+        # Setup GPIO
         GPIO.setmode(GPIO.BCM)
+        # Buttons
         GPIO.setup(self.buttons, GPIO.IN, pull_up_down=GPIO.PUD_UP)
         for pin in self.buttons:
             GPIO.add_event_detect(pin, GPIO.FALLING, self.handle_button, bouncetime=100)
+
+        # Backlight Pin
+        GPIO.setup(13, GPIO.OUT)
+        self.backlight = GPIO.PWM(13, 500)
+        self.backlight.start(100)
 
         # Setup loop thread
         self.loopThread = Thread(target=self.loop)
@@ -78,8 +84,6 @@ class PirateHat:
 
     def handle_button(self, pin):
         label = self.buttonLabels[self.buttons.index(pin)]
-
-        print(f"Label: {label}")
         
         if self.spotify == None:
             return
@@ -97,9 +101,15 @@ class PirateHat:
 
                 self.get_current_album()
                 self.disp.display(self.image)
+                self.backlight.ChangeDutyCycle(100)
+
+                if self.image == self.blankImage:  
+                    self.backlight.ChangeDutyCycle(0)
 
             else:
                 self.disp.display(self.blankImage)
+                self.backlight.ChangeDutyCycle(0)
+        
 
             time.sleep(throttle)
 
