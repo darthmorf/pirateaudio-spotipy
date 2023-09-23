@@ -34,8 +34,8 @@ class PirateHat:
         scope = "user-read-currently-playing user-read-playback-state app-remote-control user-modify-playback-state"
 
         with open(self.apiKeyFile, 'r') as file:
-            clientId = file.readline()
-            clientSecret = file.readline()
+            clientId = file.readline().replace("\n", "")
+            clientSecret = file.readline().replace("\n", "")
 
         self.spotify = spotipy.Spotify(auth_manager=SpotifyOAuth(client_id=clientId, client_secret=clientSecret, redirect_uri="http://localhost", scope=scope))
 
