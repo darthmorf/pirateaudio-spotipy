@@ -10,6 +10,7 @@ import ST7789 as ST7789
 import time
 import RPi.GPIO as GPIO
 from threading import Thread
+import traceback
 
 
 class PirateHat:
@@ -17,6 +18,10 @@ class PirateHat:
     buttons =      [ 5,   6,   16,  24]
     buttonLabels = ['A', 'B', 'X', 'Y']
     running = False
+    uiToggleMode = False
+    uiProgressBar = True
+    uiButtonHint = False
+    uiPlayingInfo = False
 
     apiKeyFile = "./spotifykeys.txt"
 
@@ -88,27 +93,44 @@ class PirateHat:
         if self.spotify == None:
             return
 
-        if label == "A":
-            self.play_pause()
-        elif label == "B":
-            self.skip_next_track()
-        elif label == "Y":
-            self.skip_last_track()
+        if label == "X":
+            self.uiToggleMode = not self.uiToggleMode
+
+        elif not self.uiToggleMode:
+            if label == "A":
+                self.play_pause()
+            elif label == "B":
+                self.skip_next_track()
+            elif label == "Y":
+                self.skip_last_track()
+
+        else:
+            if label == "A":
+                self.uiProgressBar = not self.uiProgressBar
+            elif label == "B":
+                pass
+            elif label == "Y":
+                pass
+
 
     def play_pause(self):
         current_track = self.spotify.current_playback(additional_types=["episode"])
 
         if current_track and current_track["is_playing"]:
             self.spotify.pause_playback()
+            print("Paused Playback")
         else:
             self.spotify.start_playback()
+            print("Resumed Playback")
 
     def skip_next_track(self):
         self.spotify.next_track()
+        print("Skipped track")
 
 
     def skip_last_track(self):
         self.spotify.previous_track()
+        print("Rewound track")
 
 
     def loop(self):
@@ -128,8 +150,10 @@ class PirateHat:
             if self.image == self.blankImage:
                 self.backlight.ChangeDutyCycle(0)
 
+            uiImg = self.draw_ui()
+
             # Update the display
-            self.disp.display(self.image)
+            self.disp.display(uiImg)
             time.sleep(throttle)
 
 
@@ -139,10 +163,17 @@ class PirateHat:
             # Get currently playing
             current_track = self.spotify.current_playback(additional_types=["episode"])
 
+            trackChanged = current_track and (self.last_track == None or current_track["item"]["id"] != self.last_track["item"]["id"])
+
             # Check if actually playing
-            if current_track and current_track["is_playing"] and current_track != self.last_track:
+            if current_track and current_track["is_playing"]:
 
                 self.last_track = current_track
+
+                if not trackChanged:
+                    return self.image
+
+                print(f"Now Playing '{current_track['item']['name']}'")
 
                 if current_track["currently_playing_type"] == "episode":
                     url = current_track["item"]["images"][0]["url"]
@@ -164,9 +195,55 @@ class PirateHat:
             return self.blankImage
 
         except Exception as e:
-            print("Spotify Error:")
-            print(e)   
+            print("Error:")
+            traceback.print_exc()
+
             return self.blankImage
+
+    def draw_ui(self):
+        uiFgColor = (255,255,255,128)
+        uiBgColor = (0,0,0,128)
+
+        uiImg = self.image.copy()
+        draw = ImageDraw.Draw(uiImg, "RGBA")
+
+        if self.last_track == None:
+            return uiImg
+
+        if self.uiToggleMode:
+            pass
+
+        if self.uiProgressBar:
+            progress = float(self.last_track["progress_ms"])
+            duration = self.last_track["item"]["duration_ms"]
+            pctPlayed = progress / duration
+
+            xPadding = 6
+            yPadding = 3
+            bgheight = 12
+            fgoffset = 4
+            bgwidth = self.imageSize[1] - xPadding * 2
+            radius = 4
+
+            bgx0 = xPadding
+            bgx1 = bgx0 + bgwidth
+            bgy0 = self.imageSize[1] - yPadding - bgheight
+            bgy1 = bgy0 + bgheight
+
+            fgx0 = bgx0 + fgoffset
+            fgx1 = fgx0 + int((bgwidth - fgoffset * 2) * pctPlayed)
+            fgy0 = bgy0 + fgoffset
+            fgy1 = fgy0 + bgheight - 2 * fgoffset        
+
+            #bg
+            draw.rounded_rectangle(xy=(bgx0, bgy0, bgx1, bgy1), radius=radius, fill=uiBgColor)
+
+            #fg
+            draw.rounded_rectangle(xy=(fgx0, fgy0, fgx1, fgy1), radius=radius, fill=uiFgColor)
+
+
+        return uiImg
+
 
 
 
