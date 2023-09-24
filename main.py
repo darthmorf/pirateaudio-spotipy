@@ -261,7 +261,6 @@ class PirateHat:
                 progress = float(self.last_track["progress_ms"])
                 duration = self.last_track["item"]["duration_ms"]
                 pctPlayed = progress / duration
-
                 
                 bgheight = 12
                 fgoffset = self.borderpadding
@@ -284,20 +283,20 @@ class PirateHat:
                 #fg
                 draw.rounded_rectangle(xy=(fgx0, fgy0, fgx1, fgy1), radius=radius, fill=self.uiFgColor)
             
+
             if self.uiButtonHint:
                 uiImg = self.draw_text(uiImg, u"\u23EE", TextPos.Y_Button, self.symbolFont, 1)
                 uiImg = self.draw_text(uiImg, u"\u23ED", TextPos.B_Button, self.symbolFont, 1)
                 uiImg = self.draw_text(uiImg, u"\u23EF", TextPos.A_Button, self.symbolFont, 1)
                 uiImg = self.draw_text(uiImg, u"\u2139", TextPos.X_Button, self.symbolFont, 1)
 
+
             if self.uiSongInfo:
                 media = self.last_track["item"]
-
                 name, album, artists = self.get_track_info(media)
+                uiImg = self.draw_track_info(uiImg, name, album, artists)
 
                 
-
-
         return uiImg
 
     def draw_text(self, image, text, textPos, font, borderSize):
@@ -325,6 +324,38 @@ class PirateHat:
         draw.text((x + borderSize, y), text, font=font, fill=self.uiFgColor)
 
         return  Image.alpha_composite(image.convert('RGBA'), textImg).convert('RGB')
+
+
+    def draw_track_info(self, image, name, album, artists):
+        textImg = Image.new("RGBA", image.size, (0,0,0,0))
+        draw = ImageDraw.Draw(textImg)
+
+        # Name
+        x = self.xPadding
+        y = self.yPadding
+        size = draw.textbbox((0,0), name, stroke_width=1, font=self.font)
+
+        draw.rounded_rectangle((x, y, x + size[2] + self.borderpadding * 2, y + size[3] + self.borderpadding), radius=4, fill=self.uiBgColor)
+        draw.text((x + self.borderpadding, y), name, stroke_width=1, font=self.font, fill=self.uiFgColor)
+
+        # Album
+        x = self.xPadding
+        y = y + size[3]
+        size = draw.textbbox((0,0), album, stroke_width=0, font=self.font)
+
+        draw.rounded_rectangle((x, y, x + size[2] + self.borderpadding * 2, y + size[3] + self.borderpadding), radius=4, fill=self.uiBgColor)
+        draw.text((x + self.borderpadding, y), album, stroke_width=0, font=self.font, fill=self.uiFgColor)
+
+        # Artist
+        x = self.xPadding
+        y = y +  2 * self.borderpadding + self.yPadding + size[3]
+        size = draw.textbbox((0,0), artists, stroke_width=0, font=self.font)
+
+        draw.rounded_rectangle((x, y, x + size[2] + self.borderpadding * 2, y + size[3] + self.borderpadding), radius=4, fill=self.uiBgColor)
+        draw.text((x + self.borderpadding, y), artists, stroke_width=0, font=self.font, fill=self.uiFgColor)
+
+
+        return Image.alpha_composite(image.convert('RGBA'), textImg).convert('RGB')
 
 
 
