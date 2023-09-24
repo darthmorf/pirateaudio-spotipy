@@ -5,13 +5,21 @@ import requests
 from requests.exceptions import ReadTimeout
 from PIL import Image
 from PIL import ImageDraw
+from PIL import ImageFont
 from io import BytesIO
 import ST7789 as ST7789 
 import time
 import RPi.GPIO as GPIO
 from threading import Thread
+from enum import Enum
 import traceback
 
+class TextPos(Enum):
+    A_Button = 0
+    B_Button = 1
+    X_Button = 2
+    Y_Button = 3
+    Title = 4
 
 class PirateHat:
 
@@ -21,7 +29,7 @@ class PirateHat:
     uiToggleMode = False
     uiProgressBar = True
     uiButtonHint = False
-    uiPlayingInfo = False
+    uiSongInfo = True
 
     apiKeyFile = "./spotifykeys.txt"
 
@@ -79,6 +87,10 @@ class PirateHat:
         self.loopThread = Thread(target=self.loop)
         self.loopThread.start()
 
+        # Load font for GUI
+        self.font = ImageFont.truetype("NotoSans-Regular.ttf", 18)
+        self.symbolFont = ImageFont.truetype("NotoEmoji.ttf", 24)
+
         
     def start(self):
         self.running = True
@@ -108,9 +120,9 @@ class PirateHat:
             if label == "A":
                 self.uiProgressBar = not self.uiProgressBar
             elif label == "B":
-                pass
+                self.uiButtonHint = not self.uiButtonHint
             elif label == "Y":
-                pass
+                self.uiSongInfo = not self.uiSongInfo
 
 
     def play_pause(self):
@@ -173,7 +185,8 @@ class PirateHat:
                 if not trackChanged:
                     return self.image
 
-                print(f"Now Playing '{current_track['item']['name']}'")
+                name, album, artists = self.get_track_info(current_track['item'])
+                print(f"Now Playing: {name} - {album} by {artists}")
 
                 if current_track["currently_playing_type"] == "episode":
                     url = current_track["item"]["images"][0]["url"]
@@ -200,49 +213,119 @@ class PirateHat:
 
             return self.blankImage
 
+    def get_track_info(self, track):
+        isTrack = track["type"] == "track"
+        name = track["name"]
+        album = ""
+        artists = ""
+
+        if isTrack:
+            album = track["album"]["name"]
+            for artist in track["artists"]:
+                artists += artist["name"] + ", "
+            artists = artists[:-2]
+        else:
+            album = track["show"]["name"]
+            artists = track["show"]["publisher"]
+
+        return name, album, artists
+
+
     def draw_ui(self):
-        uiFgColor = (255,255,255,128)
-        uiBgColor = (0,0,0,128)
+        self.uiFgColor = (255,255,255,128)
+        self.uiBgColor = (0,0,0,128)
 
         uiImg = self.image.copy()
         draw = ImageDraw.Draw(uiImg, "RGBA")
 
+        self.xPadding = 6
+        self.yPadding = 3
+        self.borderpadding = 4
+
         if self.last_track == None:
             return uiImg
 
+        # Draw settings UI
         if self.uiToggleMode:
-            pass
+            uiImg = self.draw_text(uiImg, "Configure UI", TextPos.Title, self.font, self.borderpadding)
+            uiImg = self.draw_text(uiImg, "Song Info", TextPos.Y_Button, self.font, self.borderpadding)
+            uiImg = self.draw_text(uiImg, "Close Menu", TextPos.X_Button, self.font, self.borderpadding)
+            uiImg = self.draw_text(uiImg, "Buttons", TextPos.B_Button, self.font, self.borderpadding)
+            uiImg = self.draw_text(uiImg, "Progress", TextPos.A_Button, self.font, self.borderpadding)
 
-        if self.uiProgressBar:
-            progress = float(self.last_track["progress_ms"])
-            duration = self.last_track["item"]["duration_ms"]
-            pctPlayed = progress / duration
 
-            xPadding = 6
-            yPadding = 3
-            bgheight = 12
-            fgoffset = 4
-            bgwidth = self.imageSize[1] - xPadding * 2
-            radius = 4
+        # Draw general UI
+        else:
 
-            bgx0 = xPadding
-            bgx1 = bgx0 + bgwidth
-            bgy0 = self.imageSize[1] - yPadding - bgheight
-            bgy1 = bgy0 + bgheight
+            if self.uiProgressBar:
+                progress = float(self.last_track["progress_ms"])
+                duration = self.last_track["item"]["duration_ms"]
+                pctPlayed = progress / duration
 
-            fgx0 = bgx0 + fgoffset
-            fgx1 = fgx0 + int((bgwidth - fgoffset * 2) * pctPlayed)
-            fgy0 = bgy0 + fgoffset
-            fgy1 = fgy0 + bgheight - 2 * fgoffset        
+                
+                bgheight = 12
+                fgoffset = self.borderpadding
+                bgwidth = self.imageSize[1] - self.xPadding * 2
+                radius = 4
 
-            #bg
-            draw.rounded_rectangle(xy=(bgx0, bgy0, bgx1, bgy1), radius=radius, fill=uiBgColor)
+                bgx0 = self.xPadding
+                bgx1 = bgx0 + bgwidth
+                bgy0 = self.imageSize[1] - self.yPadding - bgheight
+                bgy1 = bgy0 + bgheight
 
-            #fg
-            draw.rounded_rectangle(xy=(fgx0, fgy0, fgx1, fgy1), radius=radius, fill=uiFgColor)
+                fgx0 = bgx0 + fgoffset
+                fgx1 = fgx0 + int((bgwidth - fgoffset * 2) * pctPlayed)
+                fgy0 = bgy0 + fgoffset
+                fgy1 = fgy0 + bgheight - 2 * fgoffset        
+
+                #bg
+                draw.rounded_rectangle(xy=(bgx0, bgy0, bgx1, bgy1), radius=radius, fill=self.uiBgColor)
+
+                #fg
+                draw.rounded_rectangle(xy=(fgx0, fgy0, fgx1, fgy1), radius=radius, fill=self.uiFgColor)
+            
+            if self.uiButtonHint:
+                uiImg = self.draw_text(uiImg, u"\u23EE", TextPos.Y_Button, self.symbolFont, 1)
+                uiImg = self.draw_text(uiImg, u"\u23ED", TextPos.B_Button, self.symbolFont, 1)
+                uiImg = self.draw_text(uiImg, u"\u23EF", TextPos.A_Button, self.symbolFont, 1)
+                uiImg = self.draw_text(uiImg, u"\u2139", TextPos.X_Button, self.symbolFont, 1)
+
+            if self.uiSongInfo:
+                media = self.last_track["item"]
+
+                name, album, artists = self.get_track_info(media)
+
+                
 
 
         return uiImg
+
+    def draw_text(self, image, text, textPos, font, borderSize):
+        textImg = Image.new("RGBA", image.size, (0,0,0,0))
+        draw = ImageDraw.Draw(textImg)
+
+        size = draw.textbbox((0,0), text, font=font)
+
+        if textPos == TextPos.Title:
+            x = (self.imageSize[0] - size[2]) / 2
+            y = self.yPadding
+            
+        else:
+            if textPos == TextPos.Y_Button or textPos == TextPos.X_Button:
+                x = self.xPadding
+            elif textPos == TextPos.A_Button or textPos == TextPos.B_Button:
+                x = self.imageSize[0] - self.xPadding * 2 - size[2]
+
+            if textPos == TextPos.Y_Button or textPos == TextPos.B_Button:
+                y = 60 - (size[3] + 2 * borderSize) / 2
+            elif textPos == TextPos.X_Button or textPos == TextPos.A_Button:
+                y = 180 - (size[3] + 2 * borderSize) / 2
+
+        draw.rounded_rectangle((x, y, x + size[2] + borderSize * 2, y + size[3] + borderSize), radius=4, fill=self.uiBgColor)
+        draw.text((x + borderSize, y), text, font=font, fill=self.uiFgColor)
+
+        return  Image.alpha_composite(image.convert('RGBA'), textImg).convert('RGB')
+
 
 
 
